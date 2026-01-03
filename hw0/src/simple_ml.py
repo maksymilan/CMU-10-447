@@ -142,7 +142,28 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    for i in range(0,X.shape[0],batch):
+        batch_size = min(batch,X.shape[0]-i)
+        X_batch = X[i : i+batch_size] # batch_size * input_dim
+        y_batch = y[i : i+batch_size]
+        # W_1 = input_dim * d
+        # RELU: x_{i,j} = x_{i,j} if x_{i,j} > 0 else 0
+        # W_2 = d * k
+        # Z_1 = X @ W_1 -> batch_size * d
+        # Z_2 = RELU(Z_1) @ W_2
+        # G_2 = /partial L / /partial Z_2 = normalize(exp(Z_1 @ W_2)) - I_y
+        # G_1 = /partial L / /partial Z_1 = (/partial L / /partial Z_2) * (/partial Z_2 / /partial Z_1) = G_2 @ (1{Z_1>0} \odot W_2.T)
+        # /partial L / /partial W_2 = 1/m * Z_1.T @ G_2
+        # /partial L / /partial W_1 = 1/m * X.T @ G_1
+        Z1 = X_batch @ W1 # batch_size * d
+        Z2 = np.maximum(0,Z1) @ W2 # batch_size * k
+        logits = np.exp(Z2)
+        G2 = logits / np.sum(logits,axis=1,keepdims=True) # batch_size * k
+        G2[np.arange(batch_size),y_batch] -= 1
+        G1 = (Z1 > 0) * (G2 @ W2.T) # batch_size * d
+        # update parameters
+        W1 -= lr * X_batch.T @ G1 / batch_size # (input_dim * batch_size) @ (batch_size * d)
+        W2 -= lr * np.maximum(Z1,0).T @ G2 / batch_size # (d * batch_size) @ (batch_size * k)
     ### END YOUR CODE
 
 
@@ -198,4 +219,4 @@ if __name__ == "__main__":
     train_softmax(X_tr, y_tr, X_te, y_te, epochs=10, lr = 0.1)
 
     print("\nTraining two layer neural network w/ 100 hidden units")
-    train_nn(X_tr, y_tr, X_te, y_te, hidden_dim=100, epochs=20, lr = 0.2)
+    train_nn(X_tr, y_tr, X_te, y_te, hidden_dim=400, epochs=20, lr = 0.2)
