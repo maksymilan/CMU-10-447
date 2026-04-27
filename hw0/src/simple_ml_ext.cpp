@@ -2,6 +2,7 @@
 #include <pybind11/numpy.h>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 namespace py = pybind11;
 
@@ -33,7 +34,53 @@ void softmax_regression_epoch_cpp(const float *X, const unsigned char *y,
      */
 
     /// BEGIN YOUR CODE
+    for (size_t i = 0; i < m; i += batch) {
+        const size_t batch_size = std::min(batch, m - i);
+        std::vector<float> probs(batch_size * k, 0.0f);
+        std::vector<float> grad(n * k, 0.0f);
 
+        // probs[b, c] = softmax((X_batch @ theta)[b, c])
+        // Compute one sample's logits by accumulating weighted rows of theta:
+        // score[c] = sum_j X[b, j] * theta[j, c]
+        for (size_t b = 0; b < batch_size; ++b) {
+            const size_t x_row = (i + b) * n;
+            float *prob_row = &probs[b * k];
+
+            for (size_t j = 0; j < n; ++j) {
+                const float x_val = X[x_row + j];
+                const size_t theta_row = j * k;
+                for (size_t c = 0; c < k; ++c) {
+                    prob_row[c] += x_val * theta[theta_row + c];
+                }
+            }
+
+            float sum_exp = 0.0f;
+            for (size_t c = 0; c < k; ++c) {
+                const float ex = std::exp(prob_row[c]);
+                prob_row[c] = ex;
+                sum_exp += ex;
+            }
+            for (size_t c = 0; c < k; ++c) {
+                prob_row[c] /= sum_exp;
+            }
+            prob_row[y[i + b]] -= 1.0f;
+        }
+
+        // grad = X_batch^T @ (probs - one_hot) / batch_size
+        for (size_t j = 0; j < n; ++j) {
+            for (size_t c = 0; c < k; ++c) {
+                float acc = 0.0f;
+                for (size_t b = 0; b < batch_size; ++b) {
+                    acc += X[(i + b) * n + j] * probs[b * k + c];
+                }
+                grad[j * k + c] = acc / static_cast<float>(batch_size);
+            }
+        }
+
+        for (size_t idx = 0; idx < n * k; ++idx) {
+            theta[idx] -= lr * grad[idx];
+        }
+    }
     /// END YOUR CODE
 }
 
